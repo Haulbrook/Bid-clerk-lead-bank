@@ -34,7 +34,12 @@ function daysUntil(d) { if (!d) return null; return Math.ceil((new Date(d) - new
 function formatDate(d) { if (!d) return "\u2014"; return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" }); }
 function filterByPage(leads, id) {
   switch (id) {
-    case "matching": return leads.filter(l => l.isMatch === "YES");
+    case "matching": return leads.filter(l => {
+      if (l.isMatch !== "YES") return false;
+      const d = daysUntil(l.closes);
+      if (d !== null && d < 0) return false;
+      return true;
+    });
     case "all-bids": return leads.filter(l => l.type === "Gov Bid");
     case "ldp": return leads.filter(l => l.type === "Subdivision");
     case "rezoning": return leads.filter(l => l.type === "Rezoning");
@@ -206,6 +211,7 @@ export default function LeadBankDashboard() {
   const [selectedLead, setSelectedLead] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [lastRefresh, setLastRefresh] = useState(null);
+  const [hideExpired, setHideExpired] = useState(true);
 
   const fetchLeads = useCallback(async () => {
     setLoading(true); setError(null);
@@ -232,6 +238,7 @@ export default function LeadBankDashboard() {
 
   const pageLeads = filterByPage(leads, activePage);
   const filtered = pageLeads.filter(l => {
+    if (hideExpired) { const d = daysUntil(l.closes); if (d !== null && d < 0) return false; }
     if (statusFilter !== "All" && l.status !== statusFilter) return false;
     if (countyFilter !== "All" && l.county !== countyFilter) return false;
     if (assigneeFilter !== "All" && l.assignee !== assigneeFilter) return false;
@@ -297,6 +304,9 @@ export default function LeadBankDashboard() {
                 <div style={{ fontSize: 10, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Assigned To</div>
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{["All", ...SALESMEN].map(s => <FilterPill key={s} label={s} active={assigneeFilter === s} onClick={() => setAssigneeFilter(s)} />)}</div>
               </div>
+              <div style={{ display: "flex", alignItems: "flex-end" }}>
+                <button onClick={() => setHideExpired(!hideExpired)} style={{ padding: "6px 16px", borderRadius: 20, border: hideExpired ? "1.5px solid #ef4444" : "1px solid rgba(255,255,255,0.1)", background: hideExpired ? "rgba(239,68,68,0.12)" : "rgba(255,255,255,0.03)", color: hideExpired ? "#fca5a5" : "#94a3b8", fontSize: 13, fontWeight: hideExpired ? 600 : 400, cursor: "pointer", fontFamily: "'DM Sans', sans-serif", whiteSpace: "nowrap" }}>{hideExpired ? "Hiding Closed" : "Show All Dates"}</button>
+              </div>
             </div>
           </div>
 
@@ -311,7 +321,7 @@ export default function LeadBankDashboard() {
               <div style={{ overflowX: "auto" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse" }}>
                   <thead><tr style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>{["ID", "Type", "Lead", "County", "Closes", "Status", "Assigned"].map(h => <th key={h} style={{ padding: "12px 14px", textAlign: "left", fontSize: 10, fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.06em" }}>{h}</th>)}</tr></thead>
-                  <tbody>{filtered.map(lead => <LeadRow key={lead.id} lead={lead} onOpen={setSelectedLead} />)}</tbody>
+                  <tbody>{filtered.map((lead, idx) => <LeadRow key={lead.id ? `${lead.id}-${idx}` : idx} lead={lead} onOpen={setSelectedLead} />)}</tbody>
                 </table>
               </div>
             )}
